@@ -59,6 +59,27 @@ export class DocumentStore {
     await writeFile(filePath, JSON.stringify(state, null, 2), 'utf-8');
   }
 
+  /** 加载流水线状态（用于断点续传） */
+  async loadPipelineState<T>(): Promise<T | null> {
+    const filePath = join(this.currentDir, 'pipeline-state.json');
+    if (!existsSync(filePath)) return null;
+    try {
+      const raw = await readFile(filePath, 'utf-8');
+      return JSON.parse(raw) as T;
+    } catch {
+      return null;
+    }
+  }
+
+  /** 清除流水线状态（完成或放弃后） */
+  async clearPipelineState(): Promise<void> {
+    const filePath = join(this.currentDir, 'pipeline-state.json');
+    if (existsSync(filePath)) {
+      const { unlink } = await import('fs/promises');
+      await unlink(filePath);
+    }
+  }
+
   /** 获取工作目录路径 */
   getBaseDir(): string {
     return this.baseDir;

@@ -37,16 +37,19 @@ export class Session {
   private messages: Message[] = [];
   private toolCallLog: { call: ToolCall; result: unknown }[] = [];
   private toolExecutors: Map<string, (args: Record<string, unknown>) => Promise<unknown>>;
+  private onToolConfirm?: (toolName: string, args: Record<string, unknown>) => Promise<boolean>;
   private startedAt: string;
 
   constructor(
     config: SessionConfig,
     provider: LLMProvider,
     toolExecutors: Map<string, (args: Record<string, unknown>) => Promise<unknown>>,
+    onToolConfirm?: (toolName: string, args: Record<string, unknown>) => Promise<boolean>,
   ) {
     this.config = config;
     this.provider = provider;
     this.toolExecutors = toolExecutors;
+    this.onToolConfirm = onToolConfirm;
     this.startedAt = new Date().toISOString();
   }
 
@@ -102,6 +105,17 @@ export class Session {
       // 执行所有 tool calls
       const toolResults: string[] = [];
       for (const call of toolCalls) {
+        // 安全确认检查
+        if (this.onToolConfirm) {
+          const confirmed = await this.onToolConfirm(call.name, call.arguments);
+          if (!confirmed) {
+            const rejectedResult = { rejected: true, reason: '用户拒绝执行' };
+            this.toolCallLog.push({ call, result: rejectedResult });
+            toolResults.push(`Tool ${call.name} 被用户拒绝执行`);
+            continue;
+          }
+        }
+
         const executor = this.toolExecutors.get(call.name);
         if (executor) {
           try {
@@ -149,6 +163,40 @@ export class Session {
     // 达到最大轮次，返回最后的回复
     this.messages.push({ role: 'assistant', content: currentResponse.content });
     return currentResponse.content;
+  }
+
+  /**
+   * 在已有会话上追加消息并获取响应（用于重试场景）
+   * 不重新创建会话，保留上下文
+   */
+  async sendFollowUp(message: string): Promise<string> {
+    this.messages.push({ role: 'user', content: message });
+
+    let system = this.config.systemPrompt;
+    if (this.config.inputDocument) {
+      system += `\n\n## 上游文档\n\`\`\`json\n${JSON.stringify(this.config.inputDocument, null, 2)}\n\`\`\``;
+    }
+
+    const hasTools = this.config.tools && this.config.tools.length > 0;
+    let response;
+
+    if (hasTools) {
+      response = await this.provider.chatWithTools({
+        model: this.config.model,
+        system,
+        messages: this.messages,
+        tools: this.config.tools!,
+      });
+    } else {
+      response = await this.provider.chat({
+        model: this.config.model,
+        system,
+        messages: this.messages,
+      });
+    }
+
+    this.messages.push({ role: 'assistant', content: response.content });
+    return response.content;
   }
 
   /** 导出会话记录（用于审计和存档） */

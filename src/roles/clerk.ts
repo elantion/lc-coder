@@ -2,20 +2,27 @@
  * 办事员角色
  * 负责执行具体的子任务
  */
-import { BaseRole } from './base-role.js';
+import { BaseRole, type ToolConfirmCallback } from './base-role.js';
 import { ResultSchema, type Result } from '../schemas/result.js';
 import type { Instruction } from '../schemas/instruction.js';
 import type { LLMProvider } from '../llm/provider.js';
 import type { RoleOutput } from './base-role.js';
 
 export class Clerk extends BaseRole {
-  constructor(provider: LLMProvider, model: string, promptsDir?: string) {
+  constructor(
+    provider: LLMProvider,
+    model: string,
+    promptsDir?: string,
+    options?: { maxRetries?: number; onToolConfirm?: ToolConfirmCallback },
+  ) {
     super({
       roleName: 'clerk',
       promptFileName: 'clerk.md',
       provider,
       model,
       promptsDir,
+      maxRetries: options?.maxRetries,
+      onToolConfirm: options?.onToolConfirm,
     });
   }
 

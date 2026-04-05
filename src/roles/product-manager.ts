@@ -2,19 +2,26 @@
  * 产品经理角色
  * 负责需求分析、用户追问、输出需求报告
  */
-import { BaseRole } from './base-role.js';
+import { BaseRole, type ToolConfirmCallback } from './base-role.js';
 import { RequirementSchema, type Requirement } from '../schemas/requirement.js';
 import type { LLMProvider } from '../llm/provider.js';
 import type { RoleOutput } from './base-role.js';
 
 export class ProductManager extends BaseRole {
-  constructor(provider: LLMProvider, model: string, promptsDir?: string) {
+  constructor(
+    provider: LLMProvider,
+    model: string,
+    promptsDir?: string,
+    options?: { maxRetries?: number; onToolConfirm?: ToolConfirmCallback },
+  ) {
     super({
       roleName: 'product-manager',
       promptFileName: 'product-manager.md',
       provider,
       model,
       promptsDir,
+      maxRetries: options?.maxRetries,
+      onToolConfirm: options?.onToolConfirm,
     });
   }
 

@@ -8,12 +8,15 @@ import type { Result } from '../schemas/result.js';
 import type { Evaluation } from '../schemas/result.js';
 import { Clerk } from '../roles/clerk.js';
 import { Evaluator } from '../roles/evaluator.js';
+import { Verifier, type VerificationReport } from './verifier.js';
 import type { LLMProvider } from '../llm/provider.js';
+import type { ToolConfirmCallback } from '../roles/base-role.js';
 
 export interface DispatchResult {
   task: SubTask;
   result: Result | null;
   evaluation: Evaluation | null;
+  verification: VerificationReport | null;
 }
 
 export class Dispatcher {
@@ -21,17 +24,29 @@ export class Dispatcher {
   private clerkModel: string;
   private evaluatorModel: string;
   private promptsDir?: string;
+  private maxRetries: number;
+  private onToolConfirm?: ToolConfirmCallback;
+  private enableVerification: boolean;
+  private workingDir: string;
 
   constructor(params: {
     provider: LLMProvider;
     clerkModel: string;
     evaluatorModel: string;
     promptsDir?: string;
+    maxRetries?: number;
+    onToolConfirm?: ToolConfirmCallback;
+    enableVerification?: boolean;
+    workingDir?: string;
   }) {
     this.provider = params.provider;
     this.clerkModel = params.clerkModel;
     this.evaluatorModel = params.evaluatorModel;
     this.promptsDir = params.promptsDir;
+    this.maxRetries = params.maxRetries ?? 2;
+    this.onToolConfirm = params.onToolConfirm;
+    this.enableVerification = params.enableVerification ?? true;
+    this.workingDir = params.workingDir || process.cwd();
   }
 
   /**
@@ -59,7 +74,10 @@ export class Dispatcher {
     const instruction = this.createInstruction(task);
 
     // 创建全新的办事员执行
-    const clerk = new Clerk(this.provider, this.clerkModel, this.promptsDir);
+    const clerk = new Clerk(this.provider, this.clerkModel, this.promptsDir, {
+      maxRetries: this.maxRetries,
+      onToolConfirm: this.onToolConfirm,
+    });
     const clerkOutput = await clerk.executeTask(instruction);
 
     let result: Result | null = clerkOutput.result || null;
@@ -77,14 +95,51 @@ export class Dispatcher {
       };
     }
 
+    // ===== 自动验证层 =====
+    let verification: VerificationReport | null = null;
+    if (this.enableVerification && result.status === 'success') {
+      // 只对修改代码的任务运行验证
+      const shouldVerify = ['write', 'modify', 'shell'].includes(task.type);
+      if (shouldVerify) {
+        const verifier = new Verifier(this.workingDir);
+        verification = await verifier.verify();
+
+        // 如果验证失败，更新结果状态并补充信息
+        if (!verification.allPassed) {
+          const failedChecks = verification.checks
+            .filter(c => !c.passed)
+            .map(c => `${c.name}: ${c.output.slice(0, 200)}`)
+            .join('\n');
+
+          result = {
+            ...result,
+            status: 'failed',
+            error: `代码验证失败:\n${failedChecks}`,
+            notes_for_pm: `自动验证发现问题:\n${failedChecks}`,
+          };
+        } else {
+          // 验证通过，补充信息
+          const passedChecks = verification.checks.map(c => c.name).join(', ');
+          result = {
+            ...result,
+            notes_for_pm: (result.notes_for_pm || '') +
+              `\n✓ 自动验证通过: ${passedChecks}`,
+          };
+        }
+      }
+    }
+
     // 创建全新的评估器评估
-    const evaluator = new Evaluator(this.provider, this.evaluatorModel, this.promptsDir);
+    const evaluator = new Evaluator(this.provider, this.evaluatorModel, this.promptsDir, {
+      maxRetries: this.maxRetries,
+    });
     const evalOutput = await evaluator.evaluate(result, plan);
 
     return {
       task,
       result,
       evaluation: evalOutput.evaluation || null,
+      verification,
     };
   }
 }

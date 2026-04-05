@@ -9,13 +9,19 @@ import type { LLMProvider } from '../llm/provider.js';
 import type { RoleOutput } from './base-role.js';
 
 export class Evaluator extends BaseRole {
-  constructor(provider: LLMProvider, model: string, promptsDir?: string) {
+  constructor(
+    provider: LLMProvider,
+    model: string,
+    promptsDir?: string,
+    options?: { maxRetries?: number },
+  ) {
     super({
       roleName: 'evaluator',
       promptFileName: 'evaluator.md',
       provider,
       model,
       promptsDir,
+      maxRetries: options?.maxRetries,
     });
   }
 

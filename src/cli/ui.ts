@@ -2,6 +2,7 @@
  * CLI UI 工具函数
  */
 import chalk from 'chalk';
+import ora, { type Ora } from 'ora';
 
 const BRAND = chalk.hex('#7C3AED'); // 紫色品牌色
 const DIM = chalk.dim;
@@ -17,7 +18,7 @@ export const ui = {
     console.log(BRAND('  ╦  ╔═╗  ╔═╗╔═╗╔╦╗╔═╗╦═╗'));
     console.log(BRAND('  ║  ║    ║  ║║ ║ ║║║╣ ╠╦╝'));
     console.log(BRAND('  ╩═╝╚═╝  ╚═╝╚═╝═╩╝╚═╝╩╚═'));
-    console.log(DIM('  小模型流水线编码工具 v0.1.0'));
+    console.log(DIM('  小模型流水线编码工具 v0.2.0'));
     console.log('');
   },
 
@@ -26,9 +27,10 @@ export const ui = {
     console.log(`\n${icon} ${chalk.bold(title)}`);
   },
 
-  /** 阶段完成 */
-  stageComplete(title: string) {
-    console.log(SUCCESS(`  ✓ ${title} 完成`));
+  /** 阶段完成（带耗时） */
+  stageComplete(title: string, durationMs?: number) {
+    const timeStr = durationMs ? DIM(` (${ui.formatDuration(durationMs)})`) : '';
+    console.log(SUCCESS(`  ✓ ${title} 完成${timeStr}`));
   },
 
   /** 任务进度 */
@@ -46,6 +48,24 @@ export const ui = {
     }
   },
 
+  /** 验证结果 */
+  verificationReport(checks: { name: string; passed: boolean; output: string; durationMs: number }[]) {
+    if (checks.length === 0) return;
+    console.log(`\n  ${chalk.bold('🔍 自动验证')}`);
+    for (const check of checks) {
+      const icon = check.passed ? SUCCESS('✓') : ERROR('✗');
+      const time = DIM(`(${ui.formatDuration(check.durationMs)})`);
+      console.log(`    ${icon} ${check.name} ${time}`);
+      if (!check.passed) {
+        // 显示失败输出的前 3 行
+        const lines = check.output.split('\n').slice(0, 3);
+        for (const line of lines) {
+          console.log(DIM(`      ${line}`));
+        }
+      }
+    }
+  },
+
   /** 文档预览 */
   documentPreview(title: string, doc: Record<string, unknown>) {
     console.log(`\n  ${chalk.bold.underline(title)}`);
@@ -58,6 +78,14 @@ export const ui = {
       console.log(DIM(`    ... (${lines.length - 30} 行省略)`));
     }
     console.log('');
+  },
+
+  /** 工具确认提示 */
+  toolConfirmPrompt(toolName: string, reason: string) {
+    console.log('');
+    console.log(WARN(`  ⚠ 工具安全确认`));
+    console.log(`    工具: ${chalk.bold(toolName)}`);
+    console.log(`    原因: ${reason}`);
   },
 
   /** 错误信息 */
@@ -99,5 +127,32 @@ export const ui = {
     }
     ui.divider();
     console.log('');
+  },
+
+  /** 创建 Spinner */
+  createSpinner(text: string): Ora {
+    return ora({
+      text,
+      color: 'magenta',
+      indent: 2,
+    });
+  },
+
+  /** 格式化耗时 */
+  formatDuration(ms: number): string {
+    if (ms < 1000) return `${ms}ms`;
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainSec = seconds % 60;
+    return `${minutes}m${remainSec}s`;
+  },
+
+  /** 恢复提示 */
+  resumePrompt(stage: string, savedAt: string) {
+    console.log('');
+    console.log(WARN('  ⚠ 发现未完成的流水线'));
+    console.log(`    阶段: ${chalk.bold(stage)}`);
+    console.log(`    保存时间: ${savedAt}`);
   },
 };

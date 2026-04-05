@@ -1,21 +1,28 @@
 /**
  * 项目经理角色
- * 负责将需求转化为工作计划
+ * 负责将需求拆分为可执行的子任务
  */
-import { BaseRole } from './base-role.js';
+import { BaseRole, type ToolConfirmCallback } from './base-role.js';
 import { PlanSchema, type Plan } from '../schemas/plan.js';
 import type { Requirement } from '../schemas/requirement.js';
 import type { LLMProvider } from '../llm/provider.js';
 import type { RoleOutput } from './base-role.js';
 
 export class ProjectManager extends BaseRole {
-  constructor(provider: LLMProvider, model: string, promptsDir?: string) {
+  constructor(
+    provider: LLMProvider,
+    model: string,
+    promptsDir?: string,
+    options?: { maxRetries?: number; onToolConfirm?: ToolConfirmCallback },
+  ) {
     super({
       roleName: 'project-manager',
       promptFileName: 'project-manager.md',
       provider,
       model,
       promptsDir,
+      maxRetries: options?.maxRetries,
+      onToolConfirm: options?.onToolConfirm,
     });
   }
 

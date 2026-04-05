@@ -44,41 +44,42 @@
 
 ## 待完成
 
-### 🔲 Phase 2: 健壮性增强
+### ✅ Phase 2: 健壮性增强
 
 核心目标：让流水线在真实项目中稳定运行，处理各种边界情况。
 
-- [ ] **产品经理 Prompt 调优**
-  - E2E 测试中产品经理虽然能调用工具，但最终生成的需求文档需要更多验证
-  - 用多个真实需求测试，收集失败案例，迭代优化 Prompt
-  - 考虑给产品经理加一个"总结提示"，在最后一轮工具调用后明确要求输出 JSON
+- [x] **失败重试机制**
+  - BaseRole 自动重试 JSON 解析失败（最多 N 次，默认 2）
+  - Session 新增 `sendFollowUp()` 方法，在已有会话中追加修正提示
+  - 配置项 `execution.maxRetries` 控制重试次数
 
-- [ ] **失败重试机制**
-  - 当角色输出 JSON 解析失败时，自动重试（最多 N 次）
-  - 重试时在消息中指出上次的格式问题，帮助模型修正
-  - 配置项 `execution.maxRetries`
-
-- [ ] **断点续传**
-  - 保存流水线执行状态到 `.lc-coder/current/pipeline-state.json`
-  - 支持 `lc-coder resume` 命令，从中断处继续
-  - 适用于：网络中断、Ollama 崩溃、用户主动中断
-
-- [ ] **自动验证层**
-  - 办事员执行完任务后，自动运行验证：
-    - TypeScript 类型检查 (`tsc --noEmit`)
-    - Lint 检查
-    - 测试运行（如果项目有测试）
-  - 验证结果写入执行报告
-
-- [ ] **安全确认机制**
-  - `shell_exec` 执行前提示用户确认（除非 `safety.allowShellExec = true`）
+- [x] **安全确认机制**
+  - 新建 `src/tools/safety.ts`，包含危险命令黑名单（rm -rf, sudo, mkfs 等）
+  - `shell_exec` 执行前检查黑名单（始终拦截）和配置（`safety.allowShellExec`）
   - `file_write` 覆盖已有文件前提示确认
-  - 危险命令黑名单（rm -rf, sudo 等）
+  - Session 层通过 `onToolConfirm` 回调桥接 CLI 交互
 
-- [ ] **进度展示优化**
-  - 用 spinner 显示当前正在等待的阶段
-  - 流式输出模型回复（而不是等完整回复）
-  - 估算剩余时间
+- [x] **自动验证层**
+  - 新建 `src/pipeline/verifier.ts`，自动检测项目类型
+  - 办事员执行后自动运行 TypeScript 类型检查 + ESLint + 测试
+  - 验证失败时标记任务为 failed，结果注入执行报告
+
+- [x] **断点续传**
+  - 新建 `src/pipeline/state.ts`，流水线状态保存到 `.lc-coder/current/pipeline-state.json`
+  - 每完成一个阶段自动保存进度
+  - 支持 `lc-coder resume` 命令从中断处继续
+  - 启动时自动检测中断状态并提示恢复
+
+- [x] **进度展示优化**
+  - 使用 `ora` spinner 显示等待中的阶段
+  - 每个阶段/任务显示耗时统计
+  - 验证结果可视化（✓/✗ + 失败详情）
+
+- [x] **产品经理 Prompt 调优**
+  - 在输出步骤前增加「最终输出提示」，强调 JSON 完整性
+  - 增加完整的输出示例
+  - 所有字段标注为必填
+  - 配合重试机制自动修复 JSON 格式问题
 
 ---
 
