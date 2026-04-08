@@ -5,17 +5,24 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 
 export interface LcCoderConfig {
+  /** LLM 提供商 (ollama, openai) */
+  provider?: 'ollama' | 'openai';
   /** 默认模型 */
   model: string;
   /** Ollama 地址 */
   ollamaHost: string;
+  /** OpenAI 兼容配置 (如 Minimax, DeepSeek) */
+  openai?: {
+    apiKey: string;
+    baseURL?: string;
+  };
   /** 每个角色可单独配模型 */
   roles: {
-    classifier?: { model?: string };
-    'product-manager'?: { model?: string };
-    'project-manager'?: { model?: string };
-    clerk?: { model?: string };
-    evaluator?: { model?: string };
+    classifier?: { model?: string; provider?: 'ollama' | 'openai' };
+    'product-manager'?: { model?: string; provider?: 'ollama' | 'openai' };
+    'project-manager'?: { model?: string; provider?: 'ollama' | 'openai' };
+    clerk?: { model?: string; provider?: 'ollama' | 'openai' };
+    evaluator?: { model?: string; provider?: 'ollama' | 'openai' };
   };
   /** 执行设置 */
   execution: {
@@ -33,6 +40,7 @@ export interface LcCoderConfig {
 
 /** 默认配置 */
 export const DEFAULT_CONFIG: LcCoderConfig = {
+  provider: 'ollama',
   model: 'gemma4:latest',
   ollamaHost: 'http://192.168.68.210:11434',
   roles: {},
@@ -74,6 +82,14 @@ export function loadConfig(workingDir?: string): LcCoderConfig {
 export function getModelForRole(config: LcCoderConfig, role: string): string {
   const roleConfig = (config.roles as any)[role];
   return roleConfig?.model || config.model;
+}
+
+/**
+ * 获取角色使用的 LLM 提供商
+ */
+export function getProviderForRole(config: LcCoderConfig, role: string): 'ollama' | 'openai' {
+  const roleConfig = (config.roles as any)[role];
+  return roleConfig?.provider || config.provider || 'ollama';
 }
 
 function deepMerge(target: any, source: any): any {

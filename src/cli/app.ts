@@ -5,6 +5,8 @@
 import * as p from '@clack/prompts';
 import { Orchestrator, type PipelineCallbacks } from '../pipeline/orchestrator.js';
 import { OllamaProvider } from '../llm/ollama.js';
+import { OpenAIProvider } from '../llm/openai.js';
+import type { LLMProvider } from '../llm/provider.js';
 import { DocumentStore } from '../documents/store.js';
 import { loadConfig } from '../config/index.js';
 import { loadPipelineState } from '../pipeline/state.js';
@@ -28,28 +30,39 @@ export async function runApp(): Promise<void> {
   // 加载配置
   const config = loadConfig();
 
-  // 初始化 Ollama 连接
-  const provider = new OllamaProvider(config.ollamaHost);
+  // 初始化 LLM 连接
+  let provider: LLMProvider;
+  let providerName = 'Ollama';
+  if (config.provider === 'openai') {
+    if (!config.openai?.apiKey) {
+      ui.error('使用 OpenAI/Minimax 兼容提供商时，需要在配置中设置 openai.apiKey');
+      process.exit(1);
+    }
+    provider = new OpenAIProvider(config.openai.apiKey, config.openai.baseURL);
+    providerName = config.openai.baseURL?.includes('minimax') ? 'Minimax' : 'OpenAI Compatible';
+  } else {
+    provider = new OllamaProvider(config.ollamaHost);
+  }
 
   // 健康检查
-  const healthSpinner = ui.createSpinner('正在连接 Ollama...');
+  const healthSpinner = ui.createSpinner(`正在连接 ${providerName}...`);
   healthSpinner.start();
   const health = await provider.checkHealth(config.model);
   healthSpinner.stop();
 
   if (!health.connected) {
-    ui.error(`无法连接到 Ollama (${config.ollamaHost})`);
-    ui.info('请确保 Ollama 已启动：ollama serve');
+    ui.error(`无法连接到 ${providerName}`);
+    ui.info(config.provider === 'openai' ? '请检查网络连接或 API Key。' : `请确保 Ollama 已启动：ollama serve (${config.ollamaHost})`);
     process.exit(1);
   }
 
   if (!health.modelAvailable) {
     ui.warn(`模型 ${config.model} 未找到`);
-    ui.info(`请先拉取模型：ollama pull ${config.model}`);
+    ui.info(config.provider === 'openai' ? '请检查模型名称是否拼写正确，或者您的 API Key 是否有权限访问。' : `请先拉取模型：ollama pull ${config.model}`);
     process.exit(1);
   }
 
-  ui.success(`已连接 Ollama，模型: ${config.model}`);
+  ui.success(`已连接 ${providerName}，模型: ${config.model}`);
 
   // 初始化文档存储
   const store = new DocumentStore();
@@ -118,7 +131,17 @@ export async function resumeApp(): Promise<void> {
   ui.banner();
 
   const config = loadConfig();
-  const provider = new OllamaProvider(config.ollamaHost);
+  let provider: LLMProvider;
+  if (config.provider === 'openai') {
+    if (!config.openai?.apiKey) {
+      ui.error('使用 OpenAI/Minimax 兼容提供商时，需要在配置中设置 openai.apiKey');
+      process.exit(1);
+    }
+    provider = new OpenAIProvider(config.openai.apiKey, config.openai.baseURL);
+  } else {
+    provider = new OllamaProvider(config.ollamaHost);
+  }
+  
   const store = new DocumentStore();
   await store.init();
 

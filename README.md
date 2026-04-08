@@ -85,12 +85,29 @@ lc-coder/
 
 在项目目录下创建 `.lc-coder/config.json`：
 
+### 使用本地 Ollama（默认）
 ```json
 {
+  "provider": "ollama",
   "model": "gemma4:e4b",
   "ollamaHost": "http://localhost:11434",
   "roles": {
     "clerk": { "model": "gemma4:26b" }
+  },
+  "execution": {
+    "maxRetries": 2
+  }
+}
+```
+
+### 使用 Minimax / OpenAI 兼容 API
+```json
+{
+  "provider": "openai",
+  "model": "abab6.5s-chat",
+  "openai": {
+    "apiKey": "your-minimax-api-key",
+    "baseURL": "https://api.minimax.chat/v1"
   },
   "execution": {
     "maxRetries": 2
