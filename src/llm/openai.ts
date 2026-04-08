@@ -102,17 +102,25 @@ export class OpenAIProvider implements LLMProvider {
     error?: string;
   }> {
     try {
-      // 简单地列出模型以验证 API Key 和连接状态
-      await this.client.models.list();
-      return { connected: true, modelAvailable: true }; // 注意：部分兼容 API 可能不提供 models 列表，这里简化处理
+      // 部分兼容 API (如 Minimax) 可能没有 /models 端点或者不支持直接 list。
+      // 我们发一个非常简单的 hello 请求来测试连通性和鉴权。
+      await this.client.chat.completions.create({
+        model: model,
+        messages: [{ role: 'user', content: 'hello' }],
+        max_tokens: 1,
+      });
+      return { connected: true, modelAvailable: true };
     } catch (err: any) {
-      // 如果是因为权限问题等，说明网络是通的
       if (err.status === 401) {
         return {
           connected: true,
           modelAvailable: false,
-          error: 'API Key invalid',
+          error: 'API Key invalid or Unauthorized',
         };
+      }
+      if (err.status === 404 && err.url?.includes('/models')) {
+        // 如果是因为 /models 404，我们假设它是通的（前面已经改成了发 chat 测试，所以这里应该不会走到了）
+        return { connected: true, modelAvailable: true };
       }
       return {
         connected: false,
