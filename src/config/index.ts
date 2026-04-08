@@ -73,7 +73,19 @@ export function loadConfig(workingDir?: string): LcCoderConfig {
     }
   }
 
-  return deepMerge(DEFAULT_CONFIG, projectConfig) as LcCoderConfig;
+  const merged = deepMerge(DEFAULT_CONFIG, projectConfig) as LcCoderConfig;
+
+  // 尝试从环境变量读取 API Key
+  if (merged.provider === 'openai') {
+    if (!merged.openai) {
+      merged.openai = { apiKey: '' };
+    }
+    if (!merged.openai.apiKey) {
+      merged.openai.apiKey = process.env.OPENAI_API_KEY || process.env.MINIMAX_API_KEY || '';
+    }
+  }
+
+  return merged;
 }
 
 /**
